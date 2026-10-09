@@ -1,34 +1,27 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from .database import SessionLocal
-from .security import decodificar_token
-from .models.auth_models import Usuario
+from Pateleria.core.security import decodificar_token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No podría validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def obtener_usuario_actual(token: str = Depends(oauth2_scheme)) -> dict:
     payload = decodificar_token(token)
-    if payload is None:
-        raise credentials_exception
-    user_id: str = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-    
-    from sqlalchemy import select
-    user = db.execute(select(Usuario).where(Usuario.id == int(user_id))).scalar_one_or_none()
-    if user is None:
-        raise credentials_exception
-    return user
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return payload
+
+def requerir_roles(roles_permitidos: list[str]):
+    """Dependencia para validar si el rol del usuario tiene permiso."""
+    def verificador_rol(usuario_actual: dict = Depends(obtener_usuario_actual)):
+        rol_usuario = usuario_actual.get("rol")
+        if rol_usuario not in roles_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acceso denegado: Se requiere alguno de estos roles {roles_permitidos}"
+            )
+        return usuario_actual
+    return verificador_rol
