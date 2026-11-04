@@ -1,113 +1,51 @@
 <script>
-  import { iniciarSesion, registrarCliente } from '$lib/services/api_auth.js';
-  import { usuarioSesion, tokenSesion } from '$lib/stores/authStore.js';
+  import { loginAPI } from '$lib/services/api_auth.js';
   import { goto } from '$app/navigation';
-  import Card from '$lib/components/Card.svelte';
-  import Header from '$lib/components/Header.svelte';
-  import FormField from '$lib/components/FormField.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import AlertMessage from '$lib/components/AlertMessage.svelte';
-
   
-  let esRegistro = false;
-  let mensajeError = '';
-  let mensajeExito = '';
-  let cargando = false;
-
- 
   let correo = '';
   let password = '';
-  let nombre = '';
-  let apellido = '';
+  let mensajeError = '';
 
-  function alternarModo() {
-    esRegistro = !esRegistro;
-    mensajeError = '';
-    mensajeExito = '';
-  }
-
-  function redirigirPorRol(rol) {
-    if (rol === 'Administrador') goto('/admin/usuarios');
-    else if (rol === 'Pastelero') goto('/pastelero/inventario');
-    else goto('/cliente/catalogo');
-  }
-
-  async function procesarFormulario() {
-    mensajeError = '';
-    mensajeExito = '';
-    cargando = true;
-
+  async function manejarLogin() {
     try {
-      if (esRegistro) {
+      mensajeError = '';
       
-        await registrarCliente({ nombre, apellido, correo, password });
-        mensajeExito = '¡Cuenta creada con éxito! Ahora puedes iniciar sesión.';
-        esRegistro = false;
-        password = '';
-      } else {
-       
-        const respuesta = await iniciarSesion(correo, password);
-        
+      const data = await loginAPI(correo, password);
       
-        tokenSesion.set(respuesta.access_token);
-        usuarioSesion.set(respuesta.usuario);
-
-       
-        redirigirPorRol(respuesta.usuario.rol);
-      }
+     
+      localStorage.setItem('token', data.token);
+      goto('/cliente/catalogo');
     } catch (err) {
       mensajeError = err.message;
-    } finally {
-      cargando = false;
     }
   }
 </script>
 
-<div class="auth-container">
+<div class="login-wrapper">
   <Card>
-    <Header 
-      titulo={esRegistro ? 'Crear Cuenta de Cliente' : 'Iniciar Sesión'} 
-      subtitulo={esRegistro ? 'Regístrate para explorar nuestro catálogo' : 'Ingresa tus credenciales para acceder al sistema'} 
-    />
+    <h2>Iniciar Sesión</h2>
+    <p class="subtitle">Pastelería Inteligente & Monitoreo IoT</p>
 
     <AlertMessage mensaje={mensajeError} tipo="error" />
-    <AlertMessage mensaje={mensajeExito} tipo="success" />
 
-    <form on:submit|preventDefault={procesarFormulario}>
-      {#if esRegistro}
-        <FormField label="Nombre" id="nombre">
-          <input id="nombre" type="text" placeholder="Ej. Camilo" bind:value={nombre} required />
-        </FormField>
-
-        <FormField label="Apellido" id="apellido">
-          <input id="apellido" type="text" placeholder="Ej. Andrés" bind:value={apellido} required />
-        </FormField>
-      {/if}
-
-      <FormField label="Correo Electrónico" id="correo">
-        <input id="correo" type="email" placeholder="usuario@pasteleria.com" bind:value={correo} required />
+    <form on:submit|preventDefault={iniciarSesion}>
+      <FormField label="Correo Electrónico">
+        <input type="email" bind:value={correo} required placeholder="ejemplo@pasteleria.com" />
       </FormField>
 
-      <FormField label="Contraseña" id="password">
-        <input id="password" type="password" placeholder="••••••••" bind:value={password} required />
+      <FormField label="Contraseña">
+        <input type="password" bind:value={password} required placeholder="••••••••" />
       </FormField>
 
-      <div class="actions">
-        <Button type="submit" variante="primary" disabled={cargando}>
-          {cargando ? 'Procesando...' : (esRegistro ? 'Registrarme' : 'Ingresar')}
-        </Button>
-
-        <Button type="button" variante="secondary" on:click={alternarModo}>
-          {esRegistro ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate aquí'}
-        </Button>
-      </div>
+      <Button variante="primary" disabled={cargando}>
+        {cargando ? 'Autenticando...' : 'Ingresar al Sistema'}
+      </Button>
     </form>
   </Card>
 </div>
 
 <style>
-  .auth-container { max-width: 480px; margin: 40px auto; }
-  input { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; }
-  input:focus { outline: none; border-color: #2563eb; }
-  .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .login-wrapper { max-width: 400px; margin: 60px auto; }
+  .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 20px; }
+  input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
 </style>
