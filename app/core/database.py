@@ -27,3 +27,17 @@ class Database:
         except Exception as e:
             print(f"Error de conexión a la BD: {e}")
             return None
+
+
+# Instancia global de la clase Database
+db_instance = Database()
+
+# Función generadora de dependencia (get_db) para FastAPI
+def get_db():
+    conn = db_instance.get_connection()
+    if conn is None:
+        raise Exception("No se pudo establecer la conexión con la base de datos Neon")
+    try:
+        yield conn
+    finally:
+        conn.close()
