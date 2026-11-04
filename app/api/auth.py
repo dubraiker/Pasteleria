@@ -1,81 +1,58 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from passlib.exc import UnknownHashError
+from app.repositories.seguridad_repo import SeguridadRepository
+from app.core.security import crear_token_acceso, verificar_password, obtener_password_hash
 
-#
-from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
+router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
-router = APIRouter(prefix="/auth", tags=["Autenticación"])
-
-
-class LoginRequest(BaseModel):
+class LoginSchema(BaseModel):
     correo: EmailStr
     password: str
 
+class RegistroSchema(BaseModel):
+    nombre: str
+    apellido: str
+    correo: EmailStr
+    password: str
+    id_rol: int = 3  # Rol por defecto: Cliente
 
 @router.post("/login")
-def login(datos: LoginRequest, db=Depends(get_db)):
-    cursor = db.cursor()
-    correo_limpio = datos.correo.lower().strip()
-
+def login(datos: LoginSchema):
+    repo = SeguridadRepository()
+    usuario = repo.obtener_usuario_por_correo(datos.correo)
     
-    cursor.execute(
-        """
-        SELECT u.id, u.nombre, u.apellido, u.correo, u.password_hash, u.id_perfil, u.estado,
-               p.nombre AS nombre_perfil
-        FROM usuario u
-        INNER JOIN perfil p ON u.id_perfil = p.id
-        WHERE LOWER(u.correo) = %s AND u.estado = TRUE
-    """,
-        (correo_limpio,),
-    )
-
-    usuario = cursor.fetchone()
-
-    # 2. Validar existencia del usuario
-    if not usuario:
+    if not usuario or not verificar_password(datos.password, usuario["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales inválidas o cuenta inactiva",
+            detail="Correo o contraseña incorrectos"
         )
-
-   
-    try:
-        es_valida = verify_password(datos.password, usuario["password_hash"])
-    except UnknownHashError:
-        es_valida = False
-
-    if not es_valida:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales inválidas o cuenta inactiva",
-        )
-
     
-    cursor.execute(
-        """
-        SELECT m.nombre, m.ruta, m.icono
-        FROM modulos m
-        INNER JOIN modulos_x_rol mxr ON m.id = mxr.id_modulo
-        WHERE mxr.id_rol = %s AND mxr.estado = TRUE AND m.estado = TRUE
-    """,
-        (usuario["id_perfil"],),
-    )
-
-    modulos_usuario = cursor.fetchall()
-
-   
-    token_jwt = create_access_token({"sub": usuario["correo"]})
-
+    token = crear_token_acceso(data={"sub": usuario["correo"], "id_usuario": usuario["id_usuario"]})
+    
     return {
-        "access_token": token_jwt,
+        "access_token": token,
         "token_type": "bearer",
-        "usuario": {
-            "id": usuario["id"],
-            "nombre": f"{usuario['nombre']} {usuario['apellido']}",
-            "correo": usuario["correo"],
-            "rol": usuario["nombre_perfil"],
-            "modulos": modulos_usuario,
-        },
+        "usuario": usuario
     }
+
+@router.post("/registro", status_code=status.HTTP_201_CREATED)
+def registrar_cliente(datos: RegistroSchema):
+    repo = SeguridadRepository()
+    
+    # Verificar si el correo ya existe
+    if repo.obtener_usuario_por_correo(datos.correo):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El correo ya se encuentra registrado"
+        )
+    
+    password_hash = obtener_password_hash(datos.password)
+    nuevo_usuario = repo.crear_usuario(
+        nombre=datos.nombre,
+        apellido=datos.apellido,
+        correo=datos.correo,
+        password_hash=password_hash,
+        id_rol=datos.id_rol
+    )
+    
+    return {"mensaje": "Usuario registrado exitosamente", "usuario": nuevo_usuario}
