@@ -1,7 +1,6 @@
 <script>
   import { usuarioSesion, tokenSesion } from '$lib/stores/authStore.js';
   import { goto } from '$app/navigation';
-  import { loginAPI } from '$lib/services/api_auth.js'; 
   import Card from '$lib/components/Card.svelte';
   import FormField from '$lib/components/FormField.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -12,18 +11,24 @@
   let mensajeError = '';
   let cargando = false;
 
-  async function iniciarSesion(event) {
-    if (event) event.preventDefault();
+  async function iniciarSesion() {
     mensajeError = '';
     cargando = true;
-    
     try {
-      const data = await loginAPI(correo, password);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correo, password })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Error al iniciar sesión');
 
       tokenSesion.set(data.access_token);
       usuarioSesion.set(data.usuario);
 
-      if (data.usuario?.modulos && data.usuario.modulos.length > 0) {
+      // Redirige al primer módulo que retornó la base de datos para ese rol
+      if (data.usuario.modulos && data.usuario.modulos.length > 0) {
         goto(data.usuario.modulos[0].ruta);
       } else {
         goto('/');
@@ -43,7 +48,7 @@
 
     <AlertMessage mensaje={mensajeError} tipo="error" />
 
-    <form on:submit={iniciarSesion}>
+    <form on:submit|preventDefault={iniciarSesion}>
       <FormField label="Correo Electrónico">
         <input type="email" bind:value={correo} required placeholder="ejemplo@pasteleria.com" />
       </FormField>
