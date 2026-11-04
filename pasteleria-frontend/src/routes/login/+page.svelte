@@ -1,4 +1,10 @@
 <script>
+
+  import Card from '$lib/components/Card.svelte';
+  import Header from '$lib/components/Header.svelte';
+  import FormField from '$lib/components/FormField.svelte';
+  import Button from '$lib/components/Button.svelte';
+  import AlertMessage from '$lib/components/AlertMessage.svelte';
   import { usuarioSesion, tokenSesion } from '$lib/stores/authStore.js';
   import { goto } from '$app/navigation';
   import { loginAPI, registrarCliente } from '$lib/services/api_auth.js';
@@ -30,7 +36,7 @@
         tokenSesion.set(data.access_token);
         usuarioSesion.set(data.usuario);
 
-        
+        // Redirección según rol o módulos disponibles
         if (data.usuario?.modulos && data.usuario.modulos.length > 0) {
           goto(data.usuario.modulos[0].ruta);
         } else {
