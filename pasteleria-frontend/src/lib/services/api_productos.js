@@ -1,13 +1,13 @@
-const URL_PRODUCTOS = '/api/productos/';
+import { API_BASE_URL } from '$lib/config.js';
 
 export async function obtenerProductos() {
-  const res = await fetch(URL_PRODUCTOS);
+  const res = await fetch(`${API_BASE_URL}/productos/`);
   if (!res.ok) throw new Error('Error al obtener la lista de productos');
   return await res.json();
 }
 
 export async function crearProducto(producto, token) {
-  const res = await fetch(URL_PRODUCTOS, {
+  const res = await fetch(`${API_BASE_URL}/productos/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -20,7 +20,7 @@ export async function crearProducto(producto, token) {
 }
 
 export async function desactivarProducto(id, token) {
-  const res = await fetch(`${URL_PRODUCTOS}${id}`, {
+  const res = await fetch(`${API_BASE_URL}/productos/${id}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` }
   });
