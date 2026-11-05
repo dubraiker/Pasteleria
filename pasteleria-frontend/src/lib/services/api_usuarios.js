@@ -1,20 +1,29 @@
-import { get } from 'svelte/store';
-import { tokenSesion } from '$lib/stores/authStore.js';
 import { API_BASE_URL } from '$lib/config.js';
 
-export async function actualizarUsuarioAPI(idUsuario, datosUsuario, token = null) {
-  const jwtToken = token || get(tokenSesion);
-  
-  const res = await fetch(`${API_BASE_URL}/usuarios/${idUsuario}`, {
-    method: 'PUT',
+// src/lib/services/api_usuarios.js
+export async function obtenerUsuarios(token) {
+  const res = await fetch('/api/usuarios/', {
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${jwtToken}`
-    },
-    body: JSON.stringify(datosUsuario)
+      'Authorization': `Bearer ${token}`
+    }
   });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Error al actualizar usuario');
-  return data;
+  if (!res.ok) {
+    throw new Error('Error al obtener la lista de usuarios');
+  }
+
+  return await res.json();
+}
+
+export async function registrarCliente(datosCliente) {
+  const res = await fetch(`${API_BASE_URL}/usuarios/registro`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datosCliente)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Error al registrar cliente');
+  }
+  return await res.json();
 }

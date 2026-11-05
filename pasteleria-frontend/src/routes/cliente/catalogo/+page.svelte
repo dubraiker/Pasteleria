@@ -1,65 +1,59 @@
 <script>
   import { onMount } from 'svelte';
-  import { obtenerProductos } from '$lib/services/api_productos.js';
   import Header from '$lib/components/Header.svelte';
   import Card from '$lib/components/Card.svelte';
   import Badge from '$lib/components/Badge.svelte';
   import Button from '$lib/components/Button.svelte';
+  import AlertMessage from '$lib/components/AlertMessage.svelte';
+  import { usuarioSesion, tokenSesion } from '$lib/stores/authStore.js';
 
   let productos = [];
-  let cargando = false;
+  let cargando = true;
+  let mensajeExito = '';
 
-  async function cargarCatalogo() {
-    cargando = true;
+  onMount(async () => {
     try {
-      productos = await obtenerProductos();
-    } catch (err) {
-      console.error(err);
+      const res = await fetch('http://127.0.0.1:8000/api/productos', {
+        headers: { Authorization: `Bearer ${$tokenSesion}` }
+      });
+      if (res.ok) {
+        productos = await res.json();
+      }
+    } catch (e) {
+      console.error(e);
     } finally {
       cargando = false;
     }
-  }
+  });
 
-  onMount(cargarCatalogo);
+  function agregarAlCarrito(producto) {
+    mensajeExito = `¡${producto.nombre} agregado a tu pedido!`;
+    setTimeout(() => mensajeExito = '', 3000);
+  }
 </script>
 
-<Header 
-  titulo="Catálogo de Repostería Inteligente" 
-  subtitulo="Explora nuestros productos frescos disponibles en tiempo real" 
-/>
+<div class="min-h-screen bg-slate-50 p-4 md:p-8">
+  <Header title="Catálogo Exclusivo" subtitle={`Bienvenido, ${$usuarioSesion?.nombre || 'Cliente'}`} />
 
-{#if cargando}
-  <p>Cargando catálogo...</p>
-{:else if productos.length === 0}
-  <Card><p>No hay productos disponibles por el momento.</p></Card>
-{:else}
-  <div class="grid-catalogo">
-    {#each productos as producto}
-      <Card>
-        <div class="card-content">
-          <div class="badge-row">
-            <Badge tipo={producto.stock_actual > 0 ? 'success' : 'danger'}>
-              {producto.stock_actual > 0 ? 'Disponible' : 'Agotado'}
-            </Badge>
-          </div>
-          <h3>{producto.nombre}</h3>
-          <p class="desc">{producto.descripcion || 'Elaborado con ingredientes frescos de la más alta calidad.'}</p>
-          <div class="price-row">
-            <span class="price">${Number(producto.precio).toLocaleString('es-CO')} COP</span>
-            <Button variante="primary" disabled={producto.stock_actual <= 0}>Ordenar</Button>
-          </div>
+  {#if mensajeExito}
+    <div class="mb-4">
+      <AlertMessage type="success" message={mensajeExito} dismissible />
+    </div>
+  {/if}
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+    {#each productos as prod}
+      <Card hoverable>
+        <div class="flex justify-between items-start mb-3">
+          <Badge type="info">{prod.categoria}</Badge>
+          <span class="text-lg font-black text-slate-800">${prod.precio}</span>
         </div>
+        <h3 class="font-bold text-slate-800 text-xl mb-2">{prod.nombre}</h3>
+        <p class="text-slate-500 text-sm mb-4">{prod.descripcion}</p>
+        <Button variant="primary" size="sm" fullWidth on:click={() => agregarAlCarrito(prod)}>
+          + Añadir a Pedido
+        </Button>
       </Card>
     {/each}
   </div>
-{/if}
-
-<style>
-  .grid-catalogo { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-  .card-content { display: flex; flex-direction: column; height: 100%; justify-content: space-between; }
-  .badge-row { margin-bottom: 8px; }
-  h3 { margin: 0 0 8px 0; color: #1e293b; font-size: 1.2rem; }
-  .desc { color: #64748b; font-size: 0.9rem; margin-bottom: 16px; flex-grow: 1; }
-  .price-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 12px; }
-  .price { font-size: 1.25rem; font-weight: bold; color: #16a34a; }
-</style>
+</div>

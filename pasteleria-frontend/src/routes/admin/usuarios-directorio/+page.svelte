@@ -1,31 +1,50 @@
 <script>
   import Header from '$lib/components/Header.svelte';
   import Card from '$lib/components/Card.svelte';
+  import Badge from '$lib/components/Badge.svelte';
+  import Button from '$lib/components/Button.svelte';
 
-  const contactos = [
-    { cargo: 'Atención al Cliente y Pedidos', correo: 'camilo@pasteleria.com', telefono: '+57 300 123 4567' },
-    { cargo: 'Jefe de Pastelería y Producción', correo: 'carlos.mendoza@pasteleria.com', telefono: '+57 301 987 6543' },
-    { cargo: 'Soporte Técnico e Infraestructura IoT', correo: 'diana.suarez@pasteleria.com', telefono: '+57 302 456 7890' }
+  let personal = [
+    { id: 1, nombre: 'Camilo Andrés', cargo: 'Administrador de Sistema', area: 'Sistemas / TI', avatar: '👨‍💻', estado: 'En línea' },
+    { id: 2, nombre: 'Julio Rodríguez', cargo: 'Pastelero Principal', area: 'Cocina / Producción', avatar: '👨‍🍳', estado: 'En línea' },
+    { id: 3, nombre: 'Auxiliar Turno Mañana', cargo: 'Asistente de Insumos', area: 'Inventario IoT', avatar: '🥖', estado: 'Ausente' }
   ];
 </script>
 
-<Header 
-  titulo="Directorio de Atención e Información" 
-  subtitulo="Canales oficiales de contacto de nuestro personal de servicio y soporte" 
-/>
+<div class="min-h-screen bg-slate-50 p-4 md:p-8">
+  <Header 
+    title="Directorio del Personal" 
+    subtitle="Vista rápida del equipo de trabajo y roles asignados"
+  />
 
-<div class="grid-directorio">
-  {#each contactos as contacto}
-    <Card>
-      <h3>{contacto.cargo}</h3>
-      <p>📧 Email: <strong>{contacto.correo}</strong></p>
-      <p>📞 Teléfono: <strong>{contacto.telefono}</strong></p>
-    </Card>
-  {/each}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+    {#each personal as p}
+      <Card hoverable>
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center text-3xl shadow-sm">
+            {p.avatar}
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-800 text-lg">{p.nombre}</h3>
+            <p class="text-xs font-semibold text-rose-600">{p.cargo}</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl mb-4 space-y-1 text-xs">
+          <div class="flex justify-between text-slate-500">
+            <span>Área:</span>
+            <span class="font-bold text-slate-700">{p.area}</span>
+          </div>
+          <div class="flex justify-between items-center text-slate-500">
+            <span>Estado:</span>
+            <Badge type={p.estado === 'En línea' ? 'success' : 'warning'}>{p.estado}</Badge>
+          </div>
+        </div>
+
+        <Button variant="outline" size="sm" fullWidth on:click={() => alert(`Contactando a ${p.nombre}`)}>
+          💬 Contactar
+        </Button>
+      </Card>
+    {/each}
+  </div>
 </div>
-
-<style>
-  .grid-directorio { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
-  h3 { margin-top: 0; color: #1e293b; font-size: 1.1rem; }
-  p { margin: 8px 0; color: #475569; font-size: 0.95rem; }
-</style>

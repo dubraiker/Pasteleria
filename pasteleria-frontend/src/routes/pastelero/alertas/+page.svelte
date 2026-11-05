@@ -24,9 +24,16 @@
   async function cargarAlertas() {
     cargando = true;
     try {
-      alertas = await obtenerAlertasPendientes();
+      const datos = await obtenerAlertasPendientes();
+      // Mapeo seguro asegurando que nivel_riesgo exista siempre
+      alertas = (datos || []).map((a) => ({
+        ...a,
+        nivel_riesgo: a.nivel_riesgo || 'MEDIO',
+        dispositivo_nombre: a.dispositivo_nombre || 'Dispositivo IoT',
+        tipo_alerta_nombre: a.tipo_alerta_nombre || 'Alerta General'
+      }));
     } catch (err) {
-      mensajeError = err.message;
+      mensajeError = err.message || 'Error al obtener alertas pendientes';
     } finally {
       cargando = false;
     }
@@ -43,35 +50,49 @@
     mensajeExito = '';
     mensajeError = '';
     try {
-      await atenderAlerta(alerta.id, $usuarioSesion.id);
+      await atenderAlerta(alerta.id, $usuarioSesion?.id || 1);
       mensajeExito = 'Alerta marcada como atendida exitosamente';
       await cargarAlertas();
     } catch (err) {
-      mensajeError = err.message;
+      mensajeError = err.message || 'Error al procesar la atención';
     }
   }
 </script>
 
-<Header 
-  titulo="Alertas de Emergencia y Control Ambiental (IoT)" 
-  subtitulo="Monitoreo de sobrecalentamiento, incendios e intrusiones sincronizado en tiempo real" 
-/>
+<div class="p-4 md:p-8 space-y-6">
+  <Header 
+    title="Alertas de Emergencia y Control Ambiental (IoT)" 
+    subtitle="Monitoreo de sobrecalentamiento, incendios e intrusiones sincronizado en tiempo real" 
+  />
 
-<AlertMessage mensaje={mensajeError} tipo="error" />
-<AlertMessage mensaje={mensajeExito} tipo="success" />
-
-<Card>
-  <h2>Alertas Pendientes por Atención</h2>
-  {#if cargando && alertas.length === 0}
-    <p>Consultando sensores IoT...</p>
-  {:else}
-    <DataTable {columnas} datos={alertas}>
-      <div slot="acciones" let:fila>
-        <Badge tipo={fila.nivel_riesgo === 'CRITICO' ? 'danger' : (fila.nivel_riesgo === 'ALTO' ? 'warning' : 'info')}>
-          {fila.nivel_riesgo}
-        </Badge>
-        <Button variante="success" on:click={() => procesarAtencion(fila)}>Atender Emergencia</Button>
-      </div>
-    </DataTable>
+  {#if mensajeError}
+    <AlertMessage message={mensajeError} type="danger" dismissible on:dismiss={() => mensajeError = ''} />
   {/if}
-</Card>
+
+  {#if mensajeExito}
+    <AlertMessage message={mensajeExito} type="success" dismissible on:dismiss={() => mensajeExito = ''} />
+  {/if}
+
+  <Card>
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-slate-800">Alertas Pendientes por Atención</h2>
+      <p class="text-xs text-slate-500">Eventos críticos registrados por los sensores ESP32</p>
+    </div>
+
+    {#if cargando && alertas.length === 0}
+      <p class="py-8 text-center text-slate-500 animate-pulse">Consultando sensores IoT...</p>
+    {:else}
+      <!-- 🟢 Usamos let:item para que coincida con el slot de DataTable.svelte -->
+      <DataTable {columnas} datos={alertas}>
+        <div slot="acciones" let:item class="flex items-center gap-2">
+          <Badge type={item?.nivel_riesgo === 'CRITICO' || item?.nivel_riesgo === 'ALTO' ? 'danger' : 'info'}>
+            {item?.nivel_riesgo || 'GENERAL'}
+          </Badge>
+          <Button variant="primary" size="sm" on:click={() => procesarAtencion(item)}>
+            Atender Emergencia
+          </Button>
+        </div>
+      </DataTable>
+    {/if}
+  </Card>
+</div>

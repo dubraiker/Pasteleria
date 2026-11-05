@@ -1,21 +1,18 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import router as auth_router
+from app.api.rutas_inventario import router as inventario_router
+from app.api.rutas_iot import router as iot_router
+from app.api.rutas_seguridad import router as seguridad_router
+from app.api.usuarios import router as usuarios_router
 
-from app.api import (
-    auth,
-    usuarios,
-    rutas_inventario,
-    rutas_seguridad,
-    rutas_iot
-)
 
 app = FastAPI(
-    title="API Sistema Inteligente de Pastelería & Seguridad IoT",
-    description="Backend modular para monitoreo ambiental, conteo automatizado mediante YOLO y control facial",
+    title="API Sistema de Gestión - Pastelería IoT",
     version="1.0.0"
 )
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,12 +23,8 @@ app.add_middleware(
 )
 
 
-app.include_router(auth.router, prefix="/api")
-app.include_router(usuarios.router, prefix="/api")
-app.include_router(rutas_inventario.router, prefix="/api")
-app.include_router(rutas_seguridad.router, prefix="/api")
-app.include_router(rutas_iot.router, prefix="/api")
-
-@app.get("/")
-def estado_api():
-    return {"mensaje": "La API del sistema se encuentra en línea y funcional"}
+app.include_router(auth_router)            
+app.include_router(usuarios_router)        
+app.include_router(inventario_router, prefix="/api") 
+app.include_router(iot_router, prefix="/api")        
+app.include_router(seguridad_router, prefix="/api")

@@ -3,156 +3,167 @@
   import Header from '$lib/components/Header.svelte';
   import Card from '$lib/components/Card.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
-  import Badge from '$lib/components/Badge.svelte';
   import Button from '$lib/components/Button.svelte';
   import AlertMessage from '$lib/components/AlertMessage.svelte';
-  import { actualizarUsuarioAPI } from '$lib/services/api_usuarios.js';
+  import FormField from '$lib/components/FormField.svelte';
+  import { tokenSesion } from '$lib/stores/authStore.js';
 
   let usuarios = [];
   let cargando = true;
+  let mensaje = null;
   let usuarioSeleccionado = null;
-  let mostrandoModal = false;
-  let mensajeExito = '';
-  let mensajeError = '';
 
-  // Definición de columnas de la tabla
   const columnas = [
-    { key: 'nombre_completo', label: 'Usuario' },
-    { key: 'correo', label: 'Correo Electrónico' }
+    { key: 'nombre_completo', label: 'Nombre Completo' },
+    { key: 'correo', label: 'Correo Electrónico' },
+    { key: 'perfil_nombre', label: 'Rol / Perfil' },
+    { key: 'estado_label', label: 'Estado' }
   ];
-
-  // Mapeo de IDs de perfil a Nombres y Colores de Badge
-  const mapaRoles = {
-    1: { nombre: 'Administrador', tipoBadge: 'danger' },
-    2: { nombre: 'Pastelero', tipoBadge: 'warning' },
-    3: { nombre: 'Cliente', tipoBadge: 'info' }
-  };
 
   async function cargarUsuarios() {
     cargando = true;
+    mensaje = null;
+
     try {
-      const res = await fetch('/api/usuarios');
-      if (res.ok) {
-        const datos = await res.json();
-        usuarios = datos.map(u => ({ 
-          ...u, 
-          nombre_completo: `${u.nombre} ${u.apellido}`,
-          rol_info: mapaRoles[u.id_perfil] || { nombre: u.rol_nombre || 'Sin Rol', tipoBadge: 'secondary' }
+      const res = await fetch('/api/usuarios/', {
+        headers: { 'Authorization': `Bearer ${$tokenSesion}` }
+      });
+
+      if (!res.ok) throw new Error('Error al obtener la lista de usuarios');
+
+      const datosAPI = await res.json();
+
+      usuarios = datosAPI
+        .filter(u => u.estado !== false)
+        .map((u) => ({
+          ...u,
+          nombre_completo: `${u.nombre || ''} ${u.apellido || ''}`.trim(),
+          perfil_nombre: u.perfil_nombre || (u.id_perfil === 1 ? 'Administrador' : u.id_perfil === 2 ? 'Pastelero' : 'Cliente'),
+          estado: u.estado !== undefined ? u.estado : true,
+          estado_label: '🟢 Activo'
         }));
-      }
     } catch (e) {
-      console.error(e);
+      mensaje = { type: 'danger', text: e.message || 'Error de conexión.' };
+      usuarios = [];
     } finally {
       cargando = false;
     }
   }
 
-  function abrirModalEdicion(usuario) {
-    usuarioSeleccionado = { ...usuario };
-    mostrandoModal = true;
-    mensajeExito = '';
-    mensajeError = '';
-  }
+  onMount(cargarUsuarios);
 
   async function guardarCambios() {
-    mensajeExito = '';
-    mensajeError = '';
     try {
-      await actualizarUsuarioAPI(usuarioSeleccionado.id, {
-        nombre: usuarioSeleccionado.nombre,
-        apellido: usuarioSeleccionado.apellido,
+      const partes = usuarioSeleccionado.nombre_completo.trim().split(' ');
+      const nombre = partes[0] || '';
+      const apellido = partes.slice(1).join(' ') || '';
+
+      const payload = {
+        nombre,
+        apellido,
         correo: usuarioSeleccionado.correo,
         id_perfil: Number(usuarioSeleccionado.id_perfil),
-        estado: usuarioSeleccionado.estado
+        estado: true
+      };
+
+      const res = await fetch(`/api/usuarios/${usuarioSeleccionado.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${$tokenSesion}`
+        },
+        body: JSON.stringify(payload)
       });
-      mensajeExito = 'Usuario y rol actualizados con éxito';
-      mostrandoModal = false;
+
+      if (!res.ok) throw new Error('No se pudo actualizar el usuario');
+
+      mensaje = { type: 'success', text: 'Usuario actualizado exitosamente.' };
+      usuarioSeleccionado = null;
       await cargarUsuarios();
     } catch (err) {
-      mensajeError = err.message;
+      mensaje = { type: 'danger', text: err.message };
     }
   }
 
-  onMount(cargarUsuarios);
+  async function eliminarUsuario(id) {
+    if (!confirm('¿Estás seguro de eliminar este usuario del sistema?')) return;
+
+    try {
+      const res = await fetch(`/api/usuarios/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${$tokenSesion}` }
+      });
+
+      if (!res.ok) throw new Error('Error al eliminar el usuario');
+
+      mensaje = { type: 'success', text: 'Usuario eliminado correctamente.' };
+      await cargarUsuarios();
+    } catch (err) {
+      mensaje = { type: 'danger', text: err.message };
+    }
+  }
 </script>
 
-<Header 
-  titulo="Gestión de Usuarios y Roles" 
-  subtitulo="Administración de credenciales y asignación de perfiles RBAC" 
-/>
+<div class="min-h-screen bg-slate-50 p-4 md:p-8">
+  <Header 
+    title="Administración de Usuarios" 
+    subtitle="Gestión de accesos, roles y control de cuentas" 
+  />
 
-<AlertMessage mensaje={mensajeError} tipo="error" />
-<AlertMessage mensaje={mensajeExito} tipo="success" />
-
-<Card>
-  {#if cargando}
-    <p>Cargando lista de usuarios...</p>
-  {:else}
-    <DataTable {columnas} datos={usuarios}>
-      <div slot="acciones" let:fila class="acciones-cell">
-        <!-- En lugar de mostrar Activo/Inactivo, renderizamos el Badge con el Rol -->
-        <Badge tipo={fila.rol_info.tipoBadge}>
-          {fila.rol_info.nombre}
-        </Badge>
-        
-        <Button variante="secondary" on:click={() => abrirModalEdicion(fila)}>
-          ✏️ Editar
-        </Button>
-      </div>
-    </DataTable>
-  {/if}
-</Card>
-
-{#if mostrandoModal}
-  <div class="modal-backdrop">
-    <div class="modal-content">
-      <h2>Editar Usuario</h2>
-      <form on:submit|preventDefault={guardarCambios}>
-        <label>
-          Nombre:
-          <input type="text" bind:value={usuarioSeleccionado.nombre} required />
-        </label>
-        
-        <label>
-          Apellido:
-          <input type="text" bind:value={usuarioSeleccionado.apellido} required />
-        </label>
-
-        <label>
-          Correo Electrónico:
-          <input type="email" bind:value={usuarioSeleccionado.correo} required />
-        </label>
-
-        <label>
-          Perfil / Rol Asignado:
-          <select bind:value={usuarioSeleccionado.id_perfil}>
-            <option value={1}>Administrador</option>
-            <option value={2}>Pastelero</option>
-            <option value={3}>Cliente</option>
-          </select>
-        </label>
-
-        <label class="checkbox-label">
-          <input type="checkbox" bind:checked={usuarioSeleccionado.estado} />
-          Cuenta Activa
-        </label>
-
-        <div class="modal-actions">
-          <Button variante="primary" type="submit">Guardar Cambios</Button>
-          <Button variante="danger" on:click={() => mostrandoModal = false}>Cancelar</Button>
-        </div>
-      </form>
+  {#if mensaje}
+    <div class="mb-6">
+      <AlertMessage type={mensaje.type} message={mensaje.text} dismissible on:dismiss={() => mensaje = null} />
     </div>
-  </div>
-{/if}
+  {/if}
 
-<style>
-  .acciones-cell { display: flex; align-items: center; gap: 12px; }
-  .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-  .modal-content { background: white; padding: 24px; border-radius: 12px; width: 100%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-  form { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
-  label { font-size: 0.9rem; font-weight: 600; color: #334155; display: flex; flex-direction: column; gap: 4px; }
-  input[type="text"], input[type="email"], select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
-  .checkbox-label { flex-direction: row; align-items: center; gap: 8px; font-weight: normal; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
-</style>
+  <Card>
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-xl font-bold text-slate-800">Cuentas Registradas</h2>
+      <Button variant="primary" size="sm" on:click={cargarUsuarios}>🔄 Refrescar</Button>
+    </div>
+
+    {#if cargando}
+      <div class="py-12 text-center text-slate-500 animate-pulse">Cargando directorio...</div>
+    {:else}
+      <DataTable {columnas} datos={usuarios}>
+        <div slot="acciones" let:item class="flex gap-2">
+          <Button variant="outline" size="sm" on:click={() => usuarioSeleccionado = { ...item }}>
+            ✏️ Editar
+          </Button>
+          <Button variant="danger" size="sm" on:click={() => eliminarUsuario(item.id)}>
+            🗑️ Eliminar
+          </Button>
+        </div>
+      </DataTable>
+    {/if}
+  </Card>
+
+  <!-- Modal de Edición (Ventana Flotante / Popup Central) -->
+  {#if usuarioSeleccionado}
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+        <button on:click={() => usuarioSeleccionado = null} class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+        <h3 class="text-xl font-bold text-slate-800 mb-4">Editar Usuario</h3>
+        
+        <div class="space-y-4">
+          <FormField label="Nombre Completo" bind:value={usuarioSeleccionado.nombre_completo} />
+          <FormField label="Correo Electrónico" bind:value={usuarioSeleccionado.correo} type="email" />
+          
+          <div class="flex flex-col gap-1">
+            <label for="perfil" class="text-sm font-semibold text-slate-700">Rol / Perfil</label>
+            <select id="perfil" bind:value={usuarioSeleccionado.id_perfil} class="w-full p-3 rounded-xl border border-slate-200 bg-white text-slate-800 font-medium">
+              <option value={1}>1 - Administrador</option>
+              <option value={2}>2 - Pastelero</option>
+              <option value={3}>3 - Cliente</option>
+            </select>
+          </div>
+
+          <div class="pt-4 flex gap-2">
+            <Button variant="outline" fullWidth on:click={() => usuarioSeleccionado = null}>Cancelar</Button>
+            <Button variant="primary" fullWidth on:click={guardarCambios}>Guardar Cambios</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+</div>

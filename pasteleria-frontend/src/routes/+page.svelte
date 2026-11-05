@@ -1,24 +1,20 @@
 <script>
   import { onMount } from 'svelte';
-  import { usuarioSesion } from '$lib/stores/authStore.js';
   import { goto } from '$app/navigation';
+  import { tokenSesion, usuarioSesion } from '$lib/stores/authStore.js';
 
   onMount(() => {
-    if (!$usuarioSesion) {
+    if (!$tokenSesion || !$usuarioSesion) {
       goto('/login');
     } else {
-      const rol = $usuarioSesion.rol;
-      if (rol === 'Administrador') goto('/admin/usuarios');
-      else if (rol === 'Pastelero') goto('/pastelero/inventario');
-      else goto('/cliente/catalogo');
+      const perfil = $usuarioSesion.id_perfil;
+      if (perfil === 1) goto('/admin/usuarios');
+      else if (perfil === 2) goto('/pastelero/alertas-estado');
+      else goto('/cliente/catalogo-publico');
     }
   });
 </script>
 
-<div class="loading-screen">
+<div style="text-align: center; padding: 50px;">
   <p>Cargando módulo asignado...</p>
 </div>
-
-<style>
-  .loading-screen { text-align: center; padding: 60px; color: #64748b; font-size: 1.1rem; }
-</style>

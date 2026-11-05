@@ -1,1 +1,2 @@
-export const API_BASE_URL = 'https://pasteleria-eixl.onrender.com/api';
+
+export const API_BASE_URL = '/api';

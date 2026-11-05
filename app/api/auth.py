@@ -1,25 +1,37 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from app.repositories.seguridad_repo import SeguridadRepository
-from app.core.security import crear_token_acceso, verificar_password, obtener_password_hash
+from app.core.security import crear_token_acceso, verificar_password
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
+
+# Definición de exactamente 3 módulos dinámicos por rol
+MODULOS_POR_PERFIL = {
+    1: [  # Administrador (3 módulos)
+        {"nombre": "Usuarios y Roles", "ruta": "/admin/usuarios"},
+        {"nombre": "Inventario General", "ruta": "/pastelero/inventario"},
+        {"nombre": "Monitoreo IoT", "ruta": "/pastelero/alertas"}
+    ],
+    2: [  # Pastelero (3 módulos)
+        {"nombre": "Inventario & YOLO", "ruta": "/pastelero/inventario"},
+        {"nombre": "Alertas Cocina", "ruta": "/pastelero/alertas"},
+        {"nombre": "Sensores en Vivo", "ruta": "/pastelero/alertas-estado"}
+    ],
+    3: [  # Cliente (3 módulos)
+        {"nombre": "Catálogo de Productos", "ruta": "/cliente/catalogo"},
+        {"nombre": "Vitrina Pública", "ruta": "/cliente/catalogo-publico"},
+        {"nombre": "Directorio Personal", "ruta": "/admin/usuarios-directorio"}
+    ]
+}
 
 class LoginSchema(BaseModel):
     correo: EmailStr
     password: str
 
-class RegistroSchema(BaseModel):
-    nombre: str
-    apellido: str
-    correo: EmailStr
-    password: str
-    id_rol: int = 3  # Rol por defecto: Cliente
-
 @router.post("/login")
 def login(datos: LoginSchema):
     repo = SeguridadRepository()
-    usuario = repo.obtener_usuario_por_correo(datos.correo)
+    usuario = repo.obtener_por_correo(datos.correo)
     
     if not usuario or not verificar_password(datos.password, usuario["password_hash"]):
         raise HTTPException(
@@ -27,32 +39,18 @@ def login(datos: LoginSchema):
             detail="Correo o contraseña incorrectos"
         )
     
-    token = crear_token_acceso(data={"sub": usuario["correo"], "id_usuario": usuario["id_usuario"]})
+    id_perfil = usuario["id_perfil"]
+    token = crear_token_acceso(data={"sub": usuario["correo"], "id_usuario": usuario["id"]})
     
     return {
         "access_token": token,
         "token_type": "bearer",
-        "usuario": usuario
+        "usuario": {
+            "id": usuario["id"],
+            "nombre": usuario["nombre"],
+            "apellido": usuario["apellido"],
+            "correo": usuario["correo"],
+            "id_perfil": id_perfil,
+            "modulos": MODULOS_POR_PERFIL.get(id_perfil, [])
+        }
     }
-
-@router.post("/registro", status_code=status.HTTP_201_CREATED)
-def registrar_cliente(datos: RegistroSchema):
-    repo = SeguridadRepository()
-    
-    # Verificar si el correo ya existe
-    if repo.obtener_usuario_por_correo(datos.correo):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El correo ya se encuentra registrado"
-        )
-    
-    password_hash = obtener_password_hash(datos.password)
-    nuevo_usuario = repo.crear_usuario(
-        nombre=datos.nombre,
-        apellido=datos.apellido,
-        correo=datos.correo,
-        password_hash=password_hash,
-        id_rol=datos.id_rol
-    )
-    
-    return {"mensaje": "Usuario registrado exitosamente", "usuario": nuevo_usuario}

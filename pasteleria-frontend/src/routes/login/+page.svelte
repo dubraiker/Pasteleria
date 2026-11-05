@@ -1,101 +1,183 @@
+<!-- src/routes/login/+page.svelte -->
 <script>
-
-  import Card from '$lib/components/Card.svelte';
-  import Header from '$lib/components/Header.svelte';
-  import FormField from '$lib/components/FormField.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import AlertMessage from '$lib/components/AlertMessage.svelte';
-  import { usuarioSesion, tokenSesion } from '$lib/stores/authStore.js';
+  import { tokenSesion, usuarioSesion } from '$lib/stores/authStore.js';
   import { goto } from '$app/navigation';
-  import { loginAPI, registrarCliente } from '$lib/services/api_auth.js';
 
-  let esRegistro = false;
-
-  
-  let nombre = '';
-  let apellido = '';
   let correo = '';
   let password = '';
   let mensajeError = '';
-  let mensajeExito = '';
   let cargando = false;
 
-  async function handleSubmit(event) {
-    if (event) event.preventDefault();
-    mensajeError = '';
-    mensajeExito = '';
+  async function ejecutarLogin(e) {
+    // Evita explícitamente cualquier recarga del navegador
+    if (e) e.preventDefault();
+    
+    if (!correo || !password) {
+      mensajeError = 'Por favor completa todos los campos.';
+      return;
+    }
+
     cargando = true;
+    mensajeError = '';
 
     try {
-      if (esRegistro) {
-        await registrarCliente({ nombre, apellido, correo, password });
-        mensajeExito = '¡Cuenta creada con éxito! Ya puedes iniciar sesión.';
-        esRegistro = false;
-      } else {
-        const data = await loginAPI(correo, password);
-        tokenSesion.set(data.access_token);
-        usuarioSesion.set(data.usuario);
+      // Petición directa a FastAPI (pasa por el proxy de Vite)
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correo, password })
+      });
 
-        // Redirección según rol o módulos disponibles
-        if (data.usuario?.modulos && data.usuario.modulos.length > 0) {
-          goto(data.usuario.modulos[0].ruta);
-        } else {
-          goto('/cliente/catalogo');
-        }
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Correo o contraseña incorrectos');
       }
-    } catch (err) {
-      mensajeError = err.message;
+
+      const datos = await res.json();
+
+      // Guardar token y usuario en los stores reactivos
+      tokenSesion.set(datos.access_token);
+      usuarioSesion.set(datos.usuario);
+
+      const perfil = Number(datos.usuario.id_perfil);
+
+      // Redirección a las rutas existentes en las carpetas de tu proyecto
+      if (perfil === 1) {
+        await goto('/admin/usuarios');
+      } else if (perfil === 2) {
+        await goto('/pastelero/alertas-estado');
+      } else {
+        await goto('/cliente/catalogo-publico');
+      }
+    } catch (error) {
+      mensajeError = error.message;
     } finally {
       cargando = false;
     }
   }
 </script>
 
-<div class="auth-container">
-  <Card>
-    <Header 
-      titulo={esRegistro ? 'Crear Cuenta de Cliente' : 'Iniciar Sesión'} 
-      subtitulo={esRegistro ? 'Regístrate para explorar nuestro catálogo' : 'Ingresa tus credenciales para acceder al sistema'} 
-    />
+<div class="login-container">
+  <div class="login-card">
+    <h2>Pastelería Inteligente IoT</h2>
+    <p>Ingresa tus credenciales para acceder al sistema</p>
 
-    <AlertMessage mensaje={mensajeError} tipo="error" />
-    <AlertMessage mensaje={mensajeExito} tipo="success" />
+    <!-- Usamos event modifier preventDefault en la etiqueta form -->
+    <form on:submit|preventDefault={ejecutarLogin}>
+      <div class="campo">
+        <label for="correo">Correo Electrónico</label>
+        <input 
+          id="correo" 
+          type="email" 
+          placeholder="camilo@pasteleria.com" 
+          bind:value={correo} 
+          required 
+        />
+      </div>
 
-    <form on:submit|preventDefault={procesarFormulario}>
-      {#if esRegistro}
-        <FormField label="Nombre" id="nombre">
-          <input id="nombre" type="text" placeholder="Ej. Camilo" bind:value={nombre} required />
-        </FormField>
+      <div class="campo">
+        <label for="password">Contraseña</label>
+        <input 
+          id="password" 
+          type="password" 
+          placeholder="••••••••" 
+          bind:value={password} 
+          required 
+        />
+      </div>
 
-        <FormField label="Apellido" id="apellido">
-          <input id="apellido" type="text" placeholder="Ej. Andrés" bind:value={apellido} required />
-        </FormField>
+      {#if mensajeError}
+        <div class="alert-error">
+          {mensajeError}
+        </div>
       {/if}
 
-      <FormField label="Correo Electrónico" id="correo">
-        <input id="correo" type="email" placeholder="usuario@pasteleria.com" bind:value={correo} required />
-      </FormField>
-
-      <FormField label="Contraseña" id="password">
-        <input id="password" type="password" placeholder="••••••••" bind:value={password} required />
-      </FormField>
-
-      <div class="actions">
-        <Button type="submit" variante="primary" disabled={cargando}>
-          {cargando ? 'Procesando...' : (esRegistro ? 'Registrarme' : 'Ingresar')}
-        </Button>
-
-        <Button type="button" variante="secondary" on:click={alternarModo}>
-          {esRegistro ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate aquí'}
-        </Button>
-      </div>
+      <!-- type="button" desactiva por completo el submit nativo del navegador -->
+      <button 
+        type="button" 
+        class="btn-ingresar" 
+        on:click={ejecutarLogin} 
+        disabled={cargando}
+      >
+        {cargando ? 'Verificando...' : 'Ingresar'}
+      </button>
     </form>
-  </Card>
+  </div>
 </div>
 
 <style>
-  .auth-container { max-width: 480px; margin: 40px auto; }
-  input { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; }
-  input:focus { outline: none; border-color: #2563eb; }
-  .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 75vh;
+  }
+  .login-card {
+    background: #ffffff;
+    padding: 32px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-card h2 {
+    color: #db2777;
+    margin-top: 0;
+    text-align: center;
+  }
+  .login-card p {
+    text-align: center;
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 24px;
+  }
+  .campo {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 18px;
+  }
+  label {
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: #334155;
+  }
+  input {
+    padding: 10px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 1rem;
+    outline: none;
+  }
+  input:focus {
+    border-color: #db2777;
+  }
+  .alert-error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .btn-ingresar {
+    width: 100%;
+    padding: 12px;
+    background-color: #db2777;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  .btn-ingresar:hover:not(:disabled) {
+    background-color: #be185d;
+  }
+  .btn-ingresar:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 </style>

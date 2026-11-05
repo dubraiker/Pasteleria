@@ -1,40 +1,45 @@
+<!-- src/routes/pastelero/inventario/+page.svelte -->
 <script>
   import { onMount } from 'svelte';
-  import { obtenerProductos, crearProducto, desactivarProducto } from '$lib/services/api_productos.js';
-  import { tokenSesion } from '$lib/stores/authStore.js';
   import Header from '$lib/components/Header.svelte';
   import Card from '$lib/components/Card.svelte';
+  import MetricCard from '$lib/components/MetricCard.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
-  import FormField from '$lib/components/FormField.svelte';
-  import Button from '$lib/components/Button.svelte';
   import Badge from '$lib/components/Badge.svelte';
+  import Button from '$lib/components/Button.svelte';
   import AlertMessage from '$lib/components/AlertMessage.svelte';
+  import { tokenSesion } from '$lib/stores/authStore.js';
+  import { obtenerProductos } from '$lib/services/api_productos.js';
 
-  let productos = [];
-  let cargando = false;
+  // Declaramos la variable 'insumos' (y 'productos') para evitar 'insumos is not defined'
+  let insumos = [];
+  let cargando = true;
   let mensajeError = '';
-  let mensajeExito = '';
-
-  let nombre = '';
-  let descripcion = '';
-  let precio = '';
-  let stock_actual = '';
-  let etiqueta_yolo = '';
 
   const columnas = [
-    { key: 'nombre', label: 'Producto' },
+    { key: 'nombre', label: 'Producto / Insumo' },
     { key: 'descripcion', label: 'Descripción' },
-    { key: 'precio', label: 'Precio ($)' },
-    { key: 'stock_actual', label: 'Stock Disponible' },
-    { key: 'etiqueta_yolo', label: 'Etiqueta Visión IA' }
+    { key: 'precio_formateado', label: 'Precio' },
+    { key: 'estado_label', label: 'Estado' }
   ];
 
   async function cargarInventario() {
     cargando = true;
+    mensajeError = '';
+
     try {
-      productos = await obtenerProductos();
-    } catch (err) {
-      mensajeError = err.message;
+      // Consumo mediante la función del servicio api_productos.js
+      const datos = await obtenerProductos();
+
+      insumos = datos.map((item) => ({
+        ...item,
+        precio_formateado: `$${Number(item.precio || 0).toLocaleString('es-CO')} COP`,
+        estado_label: item.estado ? 'Disponible' : 'Inactivo'
+      }));
+    } catch (e) {
+      console.error('Error cargando inventario:', e);
+      mensajeError = e.message || 'Error de conexión con el servidor local.';
+      insumos = [];
     } finally {
       cargando = false;
     }
@@ -42,98 +47,54 @@
 
   onMount(cargarInventario);
 
-  async function guardarProducto() {
-    mensajeError = '';
-    mensajeExito = '';
-    try {
-      await crearProducto({
-        id_categoria: 1, // Categoría por defecto
-        nombre,
-        descripcion,
-        precio: Number(precio),
-        stock_actual: Number(stock_actual),
-        etiqueta_yolo
-      }, $tokenSesion);
-
-      mensajeExito = 'Producto registrado en el inventario';
-      nombre = ''; descripcion = ''; precio = ''; stock_actual = ''; etiqueta_yolo = '';
-      await cargarInventario();
-    } catch (err) {
-      mensajeError = err.message;
-    }
-  }
-
-  async function eliminarReg(producto) {
-    if (!confirm(`¿Desactivar del inventario el producto "${producto.nombre}"?`)) return;
-    try {
-      await desactivarProducto(producto.id, $tokenSesion);
-      mensajeExito = 'Producto retirado del catálogo activo';
-      await cargarInventario();
-    } catch (err) {
-      mensajeError = err.message;
-    }
-  }
+  // Expresión reactiva segura declarada en script
+  $: totalProductos = insumos.length;
 </script>
 
-<Header 
-  titulo="Control de Inventario y Productos" 
-  subtitulo="Gestión de productos y stock monitoreado por cámaras con Visión Artificial YOLO" 
-/>
+<div class="min-h-screen bg-slate-50 p-4 md:p-8">
+  <Header 
+    title="Panel de Inventario" 
+    subtitle="Gestión operativa y monitoreo de materia prima y productos en cocina" 
+  />
 
-<AlertMessage mensaje={mensajeError} tipo="error" />
-<AlertMessage mensaje={mensajeExito} tipo="success" />
-
-<Card>
-  <h2>Registrar Nuevo Producto en Inventario</h2>
-  <form on:submit|preventDefault={guardarProducto} class="form-grid">
-    <FormField label="Nombre del Producto" id="prod_nombre">
-      <input id="prod_nombre" type="text" placeholder="Ej. Pastel de Chocolate Elite" bind:value={nombre} required />
-    </FormField>
-
-    <FormField label="Precio (COP)" id="prod_precio">
-      <input id="prod_precio" type="number" step="100" placeholder="Ej. 45000" bind:value={precio} required />
-    </FormField>
-
-    <FormField label="Stock Inicial" id="prod_stock">
-      <input id="prod_stock" type="number" placeholder="Ej. 12" bind:value={stock_actual} required />
-    </FormField>
-
-    <FormField label="Etiqueta Visión IA (YOLO)" id="prod_yolo">
-      <input id="prod_yolo" type="text" placeholder="Ej. pastel_chocolate" bind:value={etiqueta_yolo} required />
-    </FormField>
-
-    <div class="full-width">
-      <FormField label="Descripción" id="prod_desc">
-        <textarea id="prod_desc" rows="2" placeholder="Detalles de la preparación e ingredientes..." bind:value={descripcion}></textarea>
-      </FormField>
+  {#if mensajeError}
+    <div class="mb-6">
+      <AlertMessage type="danger" message={mensajeError} dismissible />
     </div>
-
-    <div class="full-width">
-      <Button type="submit" variante="success">Guardar en Inventario</Button>
-    </div>
-  </form>
-</Card>
-
-<Card>
-  <h2>Catálogo Actual de Inventario</h2>
-  {#if cargando}
-    <p>Cargando productos...</p>
-  {:else}
-    <DataTable {columnas} datos={productos}>
-      <div slot="acciones" let:fila>
-        {#if fila.stock_actual <= 3}
-          <Badge tipo="danger">Stock Crítico</Badge>
-        {:else}
-          <Badge tipo="success">En Stock</Badge>
-        {/if}
-        <Button variante="danger" on:click={() => eliminarReg(fila)}>Retirar</Button>
-      </div>
-    </DataTable>
   {/if}
-</Card>
+
+ 
+
+  <!-- Contenedor DataTable -->
+  <Card>
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+      <div>
+        <h2 class="text-xl font-bold text-slate-800">Control de Productos & Inventario</h2>
+        <p class="text-xs text-slate-500">Listado actualizado de inventario disponible</p>
+      </div>
+      <div class="flex gap-2">
+        <Button variant="outline" size="sm" on:click={cargarInventario}>
+          🔄 Actualizar
+        </Button>
+      </div>
+    </div>
+
+    {#if cargando}
+      <div class="py-12 text-center text-slate-500 animate-pulse">Cargando datos de inventario...</div>
+    {:else}
+      <DataTable {columnas} datos={insumos}>
+        <div slot="acciones" let:item class="flex gap-2">
+          <Badge type={item.estado ? 'success' : 'danger'}>
+            {item.estado_label}
+          </Badge>
+        </div>
+      </DataTable>
+    {/if}
+  </Card>
+</div>
 
 <style>
-  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-  .full-width { grid-column: 1 / -1; }
-  input, textarea { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
+  :global(body) {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
 </style>
