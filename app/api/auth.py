@@ -5,22 +5,21 @@ from app.core.security import crear_token_acceso, verificar_password
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
-# Definición de exactamente 3 módulos dinámicos por rol
+
 MODULOS_POR_PERFIL = {
-    1: [  # Administrador (3 módulos)
+    1: [ 
         {"nombre": "Usuarios y Roles", "ruta": "/admin/usuarios"},
         {"nombre": "Inventario General", "ruta": "/pastelero/inventario"},
         {"nombre": "Monitoreo IoT", "ruta": "/pastelero/alertas"}
     ],
-    2: [  # Pastelero (3 módulos)
+    2: [  
         {"nombre": "Inventario & YOLO", "ruta": "/pastelero/inventario"},
         {"nombre": "Alertas Cocina", "ruta": "/pastelero/alertas"},
         {"nombre": "Sensores en Vivo", "ruta": "/pastelero/alertas-estado"}
     ],
-    3: [  # Cliente (3 módulos)
+    3: [  
         {"nombre": "Catálogo de Productos", "ruta": "/cliente/catalogo"},
-        {"nombre": "Vitrina Pública", "ruta": "/cliente/catalogo-publico"},
-        {"nombre": "Directorio Personal", "ruta": "/admin/usuarios-directorio"}
+        {"nombre": "Vitrina Pública", "ruta": "/cliente/catalogo-publico"}
     ]
 }
 

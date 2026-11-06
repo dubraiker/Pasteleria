@@ -7,7 +7,7 @@ from app.models.iot import (
 )
 from app.repositories.iot_repo import IoTRepository
 
-router = APIRouter(prefix="/iot", tags=["Hardware IoT y Alertas de Emergencia"])
+router = APIRouter(prefix="/api/iot", tags=["IoT & Alertas"])
 repo = IoTRepository()
 
 # --- DISPOSITIVOS ESP32 ---
